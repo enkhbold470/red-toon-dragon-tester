@@ -5,3 +5,4 @@ logs/
 results.csv
 doctor.csv
 secrets.py
+.DS_Store
