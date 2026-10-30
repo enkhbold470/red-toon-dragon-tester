@@ -31,6 +31,10 @@ class Repo(unittest.TestCase):
                 continue
             py_compile.compile(str(f), doraise=True)
 
+    def test_examples_have_header_comment(self):
+        for f in sorted((ROOT / "examples").glob("*.py")):
+            self.assertTrue(f.read_text().startswith("# "), f"{f.name} needs a header comment")
+
     def test_lib_matches_board(self):
         c = lib_constants()
         g = BOARD["gpio"]
