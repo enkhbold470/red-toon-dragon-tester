@@ -153,9 +153,9 @@ def wifi(ssid, password, timeout_s=15):
     w.active(True)
     if not w.isconnected():
         w.connect(ssid, password)
-        t0 = time.time()
+        t0 = time.ticks_ms()
         while not w.isconnected():
-            if time.time() - t0 > timeout_s:
+            if time.ticks_diff(time.ticks_ms(), t0) > timeout_s * 1000:
                 raise OSError("Wi-Fi connect timed out (antenna plugged in? right password?)")
             time.sleep_ms(200)
     return w.ifconfig()[0]
