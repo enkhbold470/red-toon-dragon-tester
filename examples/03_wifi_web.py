@@ -21,12 +21,19 @@ s.bind(("0.0.0.0", 80))
 s.listen(2)
 while True:
     conn, _ = s.accept()
-    req = conn.recv(512).decode()
-    path = req.split(" ")[1] if " " in req else "/"
-    if path.startswith("/set?"):
-        h = path[5:11]
-        dragon.eyes.color((int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)))
-        conn.send(b"HTTP/1.0 204 No Content\r\n\r\n")
-    else:
-        conn.send(b"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n" + PAGE.encode())
-    conn.close()
+    try:
+        req = conn.recv(512).decode()
+        path = req.split(" ")[1] if " " in req else "/"
+        if path.startswith("/set?"):
+            h = path[5:11]
+            try:
+                rgb = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+            except ValueError:   # not a #rrggbb color: refuse it instead of crashing the server
+                conn.send(b"HTTP/1.0 400 Bad Request\r\n\r\n")
+                continue
+            dragon.eyes.color(rgb)
+            conn.send(b"HTTP/1.0 204 No Content\r\n\r\n")
+        else:
+            conn.send(b"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n" + PAGE.encode())
+    finally:
+        conn.close()
