@@ -140,7 +140,8 @@ def wait_button(timeout_ms=None):
 
 
 def on_button(handler):
-    """Call handler(pin) on each BOOT press (interrupt, debounce it yourself if needed)."""
+    """Call handler(pin) on each BOOT press (interrupt, debounce it yourself if needed).
+    on_button(None) stops calling it."""
     _boot.irq(trigger=Pin.IRQ_FALLING, handler=handler)
 
 
