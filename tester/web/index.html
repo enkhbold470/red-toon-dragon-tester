@@ -237,7 +237,10 @@ document.addEventListener("keydown", e => {
 
 function handle(ev) {
   switch (ev.kind) {
-    case "status": setState(ev.state, ev.text); break;
+    case "status":
+      setState(ev.state, ev.text);
+      api("/api/state").then(st => applySettings(st.settings));   // another tab may have started it
+      break;
     case "board":
       $("idle").hidden = true; $("current").hidden = false;
       $("board-no").textContent = "#" + ev.board;
@@ -286,14 +289,18 @@ $("start").onclick = () => api("/api/start", {
 });
 $("stop").onclick = () => { api("/api/stop", {}); $("pill").textContent = "Stopping after this board…"; };
 
-async function init() {
-  const s = await api("/api/state");
-  $("csv").textContent = "→ " + s.csv;
-  if (s.app) $("app").textContent = "after PASS flashes: " + s.app.split("/").pop();
-  for (const [k, v] of Object.entries(s.settings || {})) {
+function applySettings(settings) {
+  for (const [k, v] of Object.entries(settings || {})) {
     const i = $(k); if (!i) continue;
     if (i.type === "checkbox") i.checked = !!v; else i.value = v;
   }
+}
+
+async function init() {
+  const s = await api("/api/state");
+  $("csv").textContent = "→ " + s.csv.split(/[\\/]/).pop();
+  if (s.app) $("app").textContent = "after PASS flashes: " + s.app.split("/").pop();
+  applySettings(s.settings);
   setState(s.state);
   loadResults();
   const es = new EventSource("/api/events");

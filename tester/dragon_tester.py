@@ -39,7 +39,8 @@ HINTS = {
     "self_reset": "The chip restarted by itself (crash or watchdog), not from the RESET pin. "
                   "If it keeps happening, check the 5V/3V3 rails (F1, D4, U2, C13) and the USB cable.",
     "i2c": "Qwiic J2: SDA=GPIO0, SCL=GPIO14. No pull-ups on the board - your sensor must have them.",
-    "wifi": "No Wi-Fi networks seen. This is the -1U module: plug an antenna into the U.FL connector.",
+    "wifi": "Wi-Fi signal missing or too weak. This is the -1U module: plug an antenna into the "
+            "U.FL connector (without one, range is a few metres).",
 }
 
 # GPIO number -> header pin label, for readable short/bridge reports
@@ -150,6 +151,7 @@ class Board:
         t0 = time.time()
         while time.time() - t0 < timeout:
             try:
+                # keep pyserial's default DTR/RTS: changing them resets a C6 on native USB
                 self.ser = serial.Serial(self.port, 115200, timeout=0.2)
                 self._enter_raw()
                 return True
@@ -322,8 +324,8 @@ RESET_CAUSES = {0: "external", 1: "power-on / EN pin", 2: "crash (panic)",
                 3: "watchdog", 4: "deep sleep", 5: "soft reset"}
 
 def wait_reset(b, timeout):
-    """Reset drops the board's USB link; afterwards the REPL state must be gone and the
-    chip must not report a crash, watchdog or soft reset (a self-reset is not the button).
+    """Pass only if the chip really restarted: a RESET press drops the USB port, the REPL
+    state is gone afterwards, and the chip doesn't report a crash, watchdog or soft reset.
     Returns (passed, cause text or None)."""
     probe = "print('alive' if '_t' in globals() else 'fresh')"
     cause = "import machine; print(machine.reset_cause())"
@@ -333,13 +335,18 @@ def wait_reset(b, timeout):
             fresh = "fresh" in b.exec(probe, timeout=2)
         except Exception:
             b.close()
-            time.sleep(0.5)
+            dropped = False
+            for _ in range(10):            # did the USB port actually go away?
+                if b.port not in esp_ports():
+                    dropped = True
+                    break
+                time.sleep(0.3)
             port = wait_for_port(10)
-            if not port:
+            if not port or not b.open(10):
                 return False, None
             b.port = port
-            if not b.open(10):
-                return False, None
+            if not dropped:                # a hiccup on the line, not a reset: keep waiting
+                continue
             fresh = "fresh" in b.exec(probe)
             if not fresh:
                 return False, None

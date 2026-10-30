@@ -41,7 +41,7 @@ def mpremote(port, *cmd):
         return 130
 
 
-INSTALL = ["cp", LIB, ":dragon.py", "+"]   # prefix: refresh the library on the board
+INSTALL = ["cp", os.path.relpath(LIB), ":dragon.py", "+"]   # prefix: refresh the library on the board
 
 
 def main():
