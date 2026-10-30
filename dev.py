@@ -57,6 +57,8 @@ def main():
         sys.exit(subprocess.call([sys.executable, os.path.join(ROOT, "tester", "dragon_tester.py"),
                                   "test", "--csv", os.path.join(ROOT, "tester", "doctor.csv")]
                                  + (["--port", a.port] if a.port else [])))
+    if cmd in ("run", "deploy") and a.args and not os.path.isfile(a.args[0]):
+        sys.exit(f"no such file: {a.args[0]}")
     port = port_of(a)
 
     if cmd == "setup":
