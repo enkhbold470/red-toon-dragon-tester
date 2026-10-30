@@ -1,0 +1,589 @@
+{
+  "schema": "toon-dragon.board.v1",
+  "name": "Red Eyes Toon Dragon",
+  "design": "https://heypcb.ai/p/961e9487c50d?view=pcb",
+  "mcu": {
+    "module": "ESP32-C6-MINI-1U-H4",
+    "chip": "ESP32-C6FH4",
+    "flash_mb": 4,
+    "psram": false,
+    "cpu": "RISC-V 160 MHz",
+    "radio": [
+      "Wi-Fi 6 2.4 GHz",
+      "BLE 5",
+      "802.15.4 (Thread/Zigbee)"
+    ],
+    "antenna": "external only: U.FL connector on the module (-1U). Without an antenna, range is a few metres."
+  },
+  "board": {
+    "size_mm": [
+      22.86,
+      40.64
+    ],
+    "layers": 4,
+    "thickness_mm": 1.6,
+    "mask": "red",
+    "finish": "ENIG",
+    "mounting_holes": "4x M2",
+    "orientation": "front side: module at top, USB-C at bottom edge"
+  },
+  "power": {
+    "input": "USB-C 5V (500 mA polyfuse F1, Schottky D4 -> 5V rail)",
+    "rails": {
+      "5V": "after D4 (~4.7 V); feeds the SK6812 eyes and J4.11",
+      "3V3": "AP2112K-3.3 LDO (U2), 600 mA max; feeds module, J4.9, Qwiic"
+    },
+    "usb_cc": "5.1k pull-downs R1/R2 (sink)"
+  },
+  "gpio": {
+    "eyes": {
+      "gpio": 8,
+      "what": "2x SK6812 RGB (GRB order), D1 (left) -> D2 (right) chain, 5V supply",
+      "notes": "strapping pin with 10k pull-up R7: must be high at boot, don't pull it low externally"
+    },
+    "boot_button": {
+      "gpio": 9,
+      "active": "low",
+      "pull": "10k up (R6)",
+      "notes": "strapping pin; held at reset = download mode"
+    },
+    "reset_button": {
+      "pin": "EN",
+      "notes": "SW1, 10k up + 1uF (RC delay)"
+    },
+    "qwiic_sda": {
+      "gpio": 0,
+      "header": "J3.8",
+      "notes": "no pull-ups on board"
+    },
+    "qwiic_scl": {
+      "gpio": 14,
+      "header": "J3.9",
+      "notes": "no pull-ups on board"
+    },
+    "uart_tx": {
+      "gpio": 16,
+      "header": "J4.8"
+    },
+    "uart_rx": {
+      "gpio": 17,
+      "header": "J4.7"
+    },
+    "usb": {
+      "gpio": [
+        12,
+        13
+      ],
+      "notes": "native USB Serial/JTAG = REPL + flashing. Never reconfigure."
+    },
+    "unconnected": [
+      15
+    ]
+  },
+  "headers": {
+    "J3": {
+      "side": "left",
+      "pitch_mm": 2.54,
+      "pins": {
+        "1": "IO7",
+        "2": "IO6",
+        "3": "IO5",
+        "4": "IO4",
+        "5": "IO3",
+        "6": "IO2",
+        "7": "IO1",
+        "8": "IO0/SDA",
+        "9": "IO14/SCL"
+      }
+    },
+    "J4": {
+      "side": "right",
+      "pitch_mm": 2.54,
+      "pins": {
+        "1": "IO23",
+        "2": "IO22",
+        "3": "IO21",
+        "4": "IO20",
+        "5": "IO19",
+        "6": "IO18",
+        "7": "IO17/RX",
+        "8": "IO16/TX",
+        "9": "3V3",
+        "10": "GND",
+        "11": "5V"
+      }
+    },
+    "J2": {
+      "what": "Qwiic / STEMMA QT (JST SH 4-pin)",
+      "pins": {
+        "1": "GND",
+        "2": "3V3",
+        "3": "SDA (IO0)",
+        "4": "SCL (IO14)"
+      }
+    }
+  },
+  "free_gpio": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+  ],
+  "adc_gpio": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "rules": [
+    "GPIO are 3.3 V only. 5V on any IO pin kills the chip.",
+    "GPIO8 and GPIO9 are strapping pins: nothing external may pull GPIO8 low or GPIO9 low during reset.",
+    "GPIO12/13 are the USB link; reconfiguring them disconnects the board.",
+    "Eyes run on 5V with 3.3V data (works, but at the edge of SK6812 VIH); keep the data line short.",
+    "Total 3V3 load including Wi-Fi peaks (~350 mA) must stay under 600 mA.",
+    "The -1U module has no PCB antenna: Wi-Fi/BLE need an antenna on U.FL.",
+    "PWR LED D3 can be disabled by cutting solder jumper JP1 on the back."
+  ],
+  "parts": [
+    {
+      "ref": "J1",
+      "value": "USB-C",
+      "mpn": "TYPE-C-31-M-12",
+      "lcsc": "C165948",
+      "footprint": "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12",
+      "where": "bottom edge"
+    },
+    {
+      "ref": "R1",
+      "value": "5.1k 1%",
+      "mpn": "0603WAF5101T5E",
+      "lcsc": "C23186",
+      "footprint": "Resistor_SMD:R_0603_1608Metric"
+    },
+    {
+      "ref": "R2",
+      "value": "5.1k 1%",
+      "mpn": "0603WAF5101T5E",
+      "lcsc": "C23186",
+      "footprint": "Resistor_SMD:R_0603_1608Metric"
+    },
+    {
+      "ref": "C1",
+      "value": "10uF 25V X5R",
+      "mpn": "CL10A106MA8NRNC",
+      "lcsc": "C96446",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric"
+    },
+    {
+      "ref": "U1",
+      "value": "ESP32-C6-MINI-1U-H4",
+      "mpn": "ESP32-C6-MINI-1U-H4",
+      "lcsc": "C20627095",
+      "footprint": "HeyPCB_Modules:Espressif_ESP32_C6_MINI_1U",
+      "where": "top center (module, U.FL antenna connector)"
+    },
+    {
+      "ref": "U2",
+      "value": "AP2112K-3.3",
+      "mpn": "AP2112K-3.3TRG1",
+      "lcsc": "C51118",
+      "footprint": "Package_TO_SOT_SMD:SOT-23-5"
+    },
+    {
+      "ref": "U3",
+      "value": "USBLC6-2SC6",
+      "mpn": "USBLC6-2SC6",
+      "lcsc": "C2687116",
+      "footprint": "HeyPCB_LCSC:SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL"
+    },
+    {
+      "ref": "D1",
+      "value": "SK6812-EC20",
+      "mpn": "SK6812-EC20",
+      "lcsc": "C2909058",
+      "footprint": "HeyPCB_LCSC:LED-SMD_4P-L2.0-W2.0-BR",
+      "where": "left eye"
+    },
+    {
+      "ref": "D2",
+      "value": "SK6812-EC20",
+      "mpn": "SK6812-EC20",
+      "lcsc": "C2909058",
+      "footprint": "HeyPCB_LCSC:LED-SMD_4P-L2.0-W2.0-BR",
+      "where": "right eye"
+    },
+    {
+      "ref": "J2",
+      "value": "SM04B-SRSS-TB(LF)(SN)",
+      "mpn": "SM04B-SRSS-TB(LF)(SN)",
+      "lcsc": "C160404",
+      "footprint": "HeyPCB_LCSC:CONN-SMD_4P-P1.00_SM04B-SRSS-TB-LF-SN",
+      "where": "bottom left (Qwiic)"
+    },
+    {
+      "ref": "C2",
+      "value": "100nF 50V X7R",
+      "mpn": "CC0603KRX7R9BB104",
+      "lcsc": "C14663",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric"
+    },
+    {
+      "ref": "C3",
+      "value": "100nF 50V X7R",
+      "mpn": "CC0603KRX7R9BB104",
+      "lcsc": "C14663",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric"
+    },
+    {
+      "ref": "C4",
+      "value": "100nF 50V X7R",
+      "mpn": "CC0603KRX7R9BB104",
+      "lcsc": "C14663",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric"
+    },
+    {
+      "ref": "C5",
+      "value": "100nF 50V X7R",
+      "mpn": "CC0603KRX7R9BB104",
+      "lcsc": "C14663",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric"
+    },
+    {
+      "ref": "C10",
+      "value": "1uF 25V X5R",
+      "mpn": "CL05A105KA5NQNC",
+      "lcsc": "C52923",
+      "footprint": "Capacitor_SMD:C_0402_1005Metric"
+    },
+    {
+      "ref": "C13",
+      "value": "10uF 25V X5R",
+      "mpn": "CL10A106MA8NRNC",
+      "lcsc": "C96446",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric"
+    },
+    {
+      "ref": "R5",
+      "value": "10k 1%",
+      "mpn": "0603WAF1002T5E",
+      "lcsc": "C25804",
+      "footprint": "Resistor_SMD:R_0603_1608Metric"
+    },
+    {
+      "ref": "R6",
+      "value": "10k 1%",
+      "mpn": "0603WAF1002T5E",
+      "lcsc": "C25804",
+      "footprint": "Resistor_SMD:R_0603_1608Metric"
+    },
+    {
+      "ref": "R7",
+      "value": "10k 1%",
+      "mpn": "0402WGF1002TCE",
+      "lcsc": "C25744",
+      "footprint": "Resistor_SMD:R_0402_1005Metric"
+    },
+    {
+      "ref": "SW1",
+      "value": "RESET",
+      "mpn": "TS-1088-AR02016",
+      "lcsc": "C720477",
+      "footprint": "HeyPCB_LCSC:SW-SMD_L3.9-W3.0-P4.45",
+      "where": "left of the eyes (RESET)"
+    },
+    {
+      "ref": "SW2",
+      "value": "BOOT",
+      "mpn": "TS-1088-AR02016",
+      "lcsc": "C720477",
+      "footprint": "HeyPCB_LCSC:SW-SMD_L3.9-W3.0-P4.45",
+      "where": "right of the eyes (BOOT)"
+    },
+    {
+      "ref": "J3",
+      "value": "GPIO left",
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x09_P2.54mm_Vertical",
+      "where": "left edge header"
+    },
+    {
+      "ref": "J4",
+      "value": "GPIO right",
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x11_P2.54mm_Vertical",
+      "where": "right edge header"
+    },
+    {
+      "ref": "D3",
+      "value": "PWR",
+      "mpn": "KT-0603R",
+      "lcsc": "C2286",
+      "footprint": "LED_SMD:LED_0603_1608Metric",
+      "where": "right, above USB (PWR LED)"
+    },
+    {
+      "ref": "R11",
+      "value": "10k 1%",
+      "mpn": "0603WAF1002T5E",
+      "lcsc": "C25804",
+      "footprint": "Resistor_SMD:R_0603_1608Metric"
+    },
+    {
+      "ref": "H1",
+      "value": "M2",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2_ISO7380"
+    },
+    {
+      "ref": "H2",
+      "value": "M2",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2_ISO7380"
+    },
+    {
+      "ref": "H3",
+      "value": "M2",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2_ISO7380"
+    },
+    {
+      "ref": "H4",
+      "value": "M2",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2_ISO7380"
+    },
+    {
+      "ref": "D4",
+      "value": "1N5819WS",
+      "mpn": "1N5819WS",
+      "lcsc": "C191023",
+      "footprint": "Diode_SMD:D_SOD-323"
+    },
+    {
+      "ref": "F1",
+      "value": "500mA PTC",
+      "mpn": "JK-nSMD050-30",
+      "lcsc": "C720075",
+      "footprint": "Fuse:Fuse_1206_3216Metric"
+    },
+    {
+      "ref": "JP1",
+      "value": "LED",
+      "footprint": "Jumper:SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm",
+      "where": "BACK side, under D3"
+    }
+  ],
+  "nets": {
+    "3V3": [
+      "C13.1",
+      "C3.1",
+      "J2.2",
+      "J4.9",
+      "R11.1",
+      "R5.1",
+      "R6.1",
+      "R7.1",
+      "U1.3",
+      "U2.5"
+    ],
+    "5V": [
+      "C1.1",
+      "C2.1",
+      "C4.1",
+      "C5.1",
+      "D1.1",
+      "D2.1",
+      "D4.1",
+      "J4.11",
+      "U2.1",
+      "U2.3"
+    ],
+    "BOOT_IO9": [
+      "R6.2",
+      "SW2.1",
+      "U1.23"
+    ],
+    "EN": [
+      "C10.1",
+      "R5.2",
+      "SW1.1",
+      "U1.8"
+    ],
+    "GND": [
+      "C1.2",
+      "C10.2",
+      "C13.2",
+      "C2.2",
+      "C3.2",
+      "C4.2",
+      "C5.2",
+      "D1.3",
+      "D2.3",
+      "J1.A1",
+      "J1.A12",
+      "J1.B1",
+      "J1.B12",
+      "J1.SH",
+      "J2.1",
+      "J2.5",
+      "J2.6",
+      "J4.10",
+      "JP1.2",
+      "R1.2",
+      "R2.2",
+      "SW1.2",
+      "SW2.2",
+      "U1.1",
+      "U1.2",
+      "U1.11",
+      "U1.14",
+      "U1.36",
+      "U1.37",
+      "U1.38",
+      "U1.39",
+      "U1.40",
+      "U1.41",
+      "U1.42",
+      "U1.43",
+      "U1.44",
+      "U1.45",
+      "U1.46",
+      "U1.47",
+      "U1.48",
+      "U1.49",
+      "U1.50",
+      "U1.51",
+      "U1.52",
+      "U1.53",
+      "U2.2",
+      "U3.2"
+    ],
+    "I2C_SCL_GPIO14": [
+      "J2.4",
+      "J3.9",
+      "U1.19"
+    ],
+    "I2C_SDA_GPIO0": [
+      "J2.3",
+      "J3.8",
+      "U1.12"
+    ],
+    "IO1": [
+      "J3.7",
+      "U1.13"
+    ],
+    "IO16_TXD0": [
+      "J4.8",
+      "U1.31"
+    ],
+    "IO17_RXD0": [
+      "J4.7",
+      "U1.30"
+    ],
+    "IO18": [
+      "J4.6",
+      "U1.24"
+    ],
+    "IO19": [
+      "J4.5",
+      "U1.25"
+    ],
+    "IO2": [
+      "J3.6",
+      "U1.5"
+    ],
+    "IO20": [
+      "J4.4",
+      "U1.26"
+    ],
+    "IO21": [
+      "J4.3",
+      "U1.27"
+    ],
+    "IO22": [
+      "J4.2",
+      "U1.28"
+    ],
+    "IO23": [
+      "J4.1",
+      "U1.29"
+    ],
+    "IO3": [
+      "J3.5",
+      "U1.6"
+    ],
+    "IO4": [
+      "J3.4",
+      "U1.9"
+    ],
+    "IO5": [
+      "J3.3",
+      "U1.10"
+    ],
+    "IO6": [
+      "J3.2",
+      "U1.15"
+    ],
+    "IO7": [
+      "J3.1",
+      "U1.16"
+    ],
+    "J1_CC1": [
+      "J1.A5",
+      "R1.1"
+    ],
+    "J1_CC2": [
+      "J1.B5",
+      "R2.1"
+    ],
+    "J1_USB_DM": [
+      "J1.A7",
+      "J1.B7",
+      "U1.17",
+      "U3.3",
+      "U3.4"
+    ],
+    "J1_USB_DP": [
+      "J1.A6",
+      "J1.B6",
+      "U1.18",
+      "U3.1",
+      "U3.6"
+    ],
+    "LED_DATA2": [
+      "D1.2",
+      "D2.4"
+    ],
+    "LED_IO8_STRAP": [
+      "D1.4",
+      "R7.2",
+      "U1.22"
+    ],
+    "PWR_LED": [
+      "D3.2",
+      "R11.2"
+    ],
+    "PWR_LED_K": [
+      "D3.1",
+      "JP1.1"
+    ],
+    "VBUS": [
+      "F1.1",
+      "J1.A4",
+      "J1.A9",
+      "J1.B4",
+      "J1.B9",
+      "U3.5"
+    ],
+    "VBUS_F": [
+      "D4.2",
+      "F1.2"
+    ]
+  }
+}

@@ -3,3 +3,5 @@ __pycache__/
 firmware/
 logs/
 results.csv
+doctor.csv
+secrets.py

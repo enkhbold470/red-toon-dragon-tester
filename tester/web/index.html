@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toon Dragon test station</title>
+<style>
+  :root {
+    --bg: #f6f5f3; --card: #fff; --ink: #1d1b1a; --muted: #6f6a66; --line: #e6e2de;
+    --red: #c8262b; --pass: #1f8a4c; --pass-bg: #e3f4ea; --fail: #c8262b; --fail-bg: #fbe4e3;
+    --warn: #9a6a00; --warn-bg: #fff4d6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px;
+           background: var(--card); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  header h1 span { color: var(--red); }
+  .pill { padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+          background: #eee; color: var(--muted); }
+  .pill.waiting { background: var(--warn-bg); color: var(--warn); }
+  .pill.testing { background: #e4ecfb; color: #2457b8; }
+  .pill.unplug { background: var(--pass-bg); color: var(--pass); }
+  .spacer { flex: 1; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+           padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  button:hover { border-color: #c9c3bd; }
+  button.primary { background: var(--red); border-color: var(--red); color: #fff; }
+  button:disabled { opacity: .45; cursor: default; }
+
+  .settings { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 10px 24px;
+              border-bottom: 1px solid var(--line); background: #fbfaf9; color: var(--muted);
+              font-size: 14px; }
+  .settings label { display: flex; align-items: center; gap: 6px; }
+  .settings input[type=text] { width: 160px; }
+  .settings input[type=number] { width: 64px; }
+  .settings input { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; }
+  .settings fieldset { border: 0; margin: 0; padding: 0; display: contents; }
+
+  main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; padding: 20px 24px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+             margin: 0 0 12px; font-weight: 650; }
+
+  #board-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; }
+  #board-no { font-size: 34px; font-weight: 750; font-variant-numeric: tabular-nums; }
+  #board-mac { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+
+  #idle { text-align: center; padding: 48px 0; color: var(--muted); }
+  #idle .big { font-size: 22px; color: var(--ink); font-weight: 650; margin-bottom: 6px; }
+
+  #verdict { display: none; border-radius: 10px; padding: 18px; text-align: center;
+             font-size: 30px; font-weight: 800; letter-spacing: .04em; margin: 4px 0 14px; }
+  #verdict.PASS { display: block; background: var(--pass); color: #fff; }
+  #verdict.FAIL { display: block; background: var(--fail); color: #fff; }
+  #verdict small { display: block; font-size: 14px; font-weight: 600; letter-spacing: 0; opacity: .9; }
+
+  #ask { display: none; border: 2px solid var(--warn); background: var(--warn-bg); border-radius: 10px;
+         padding: 16px; margin-bottom: 14px; }
+  #ask.show { display: block; }
+  #ask p { margin: 0 0 12px; font-weight: 650; font-size: 17px; }
+  #ask .btns { display: flex; gap: 10px; }
+  #ask button { font-size: 17px; padding: 12px 22px; }
+  #ask button.y { background: var(--pass); border-color: var(--pass); color: #fff; }
+  #ask button.n { background: var(--fail); border-color: var(--fail); color: #fff; }
+  kbd { font: 12px ui-monospace, Menlo, monospace; padding: 1px 5px; border-radius: 4px;
+        background: rgba(0,0,0,.15); margin-left: 6px; }
+
+  #steps { list-style: none; margin: 0; padding: 0; }
+  .step { border-top: 1px solid var(--line); padding: 8px 0; }
+  .step:first-child { border-top: 0; }
+  .step-title { font-weight: 650; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #d4cfca; flex: none; }
+  .step.pass .dot { background: var(--pass); }
+  .step.fail .dot { background: var(--fail); }
+  .step.running .dot { background: #2457b8; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .line { margin: 3px 0 0 18px; font-size: 14px; }
+  .line.pass { color: var(--pass); }
+  .line.fail { color: var(--fail); font-weight: 600; }
+  .line.note { color: var(--muted); }
+  .line.prompt { color: var(--warn); font-weight: 700; font-size: 16px; animation: pulse 1.2s infinite; }
+  .line.prompt.done { animation: none; opacity: .6; font-size: 14px; }
+  .line.log { font: 12px ui-monospace, Menlo, monospace; white-space: pre-wrap; color: var(--muted);
+              background: #f4f2ef; padding: 8px; border-radius: 6px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .stat b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .stat.p b { color: var(--pass); } .stat.f b { color: var(--fail); }
+  .table-wrap { max-height: 60vh; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { position: sticky; top: 0; background: var(--card); text-align: left; color: var(--muted);
+       font-weight: 600; padding: 6px; border-bottom: 1px solid var(--line); }
+  td { padding: 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td.mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  tr.FAIL td { background: var(--fail-bg); }
+  .tag { font-weight: 700; } .tag.PASS { color: var(--pass); } .tag.FAIL { color: var(--fail); }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>●</span> Toon Dragon test station</h1>
+  <span id="pill" class="pill">Idle</span>
+  <div class="spacer"></div>
+  <span id="ports" class="muted"></span>
+  <button id="start" class="primary">Start testing</button>
+  <button id="stop" disabled>Stop</button>
+</header>
+
+<div class="settings">
+  <fieldset id="settings">
+    <label>Note <input type="text" id="note" placeholder="e.g. lot A"></label>
+    <label><input type="checkbox" id="auto"> Skip human checks (LEDs, buttons)</label>
+    <label><input type="checkbox" id="no_flash"> Test only, don't flash</label>
+    <label><input type="checkbox" id="skip_uart_pins"> Skip IO16/IO17</label>
+    <label>Min Wi-Fi RSSI <input type="number" id="min_rssi" value="-85"> dBm</label>
+  </fieldset>
+  <span id="app" class="muted"></span>
+</div>
+
+<main>
+  <section class="card">
+    <h2>Current board</h2>
+    <div id="idle"><div class="big">Press “Start testing”</div>then plug in a board over USB-C</div>
+    <div id="current" hidden>
+      <div id="board-head"><span id="board-no"></span><span id="board-mac"></span></div>
+      <div id="verdict"></div>
+      <div id="ask"><p id="ask-q"></p><div class="btns" id="ask-btns"></div></div>
+      <ul id="steps"></ul>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Results <span id="csv" class="muted" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
+    <div class="stats">
+      <div class="stat"><b id="s-total">0</b><span>tested</span></div>
+      <div class="stat p"><b id="s-pass">0</b><span>pass</span></div>
+      <div class="stat f"><b id="s-fail">0</b><span>fail</span></div>
+      <div class="stat"><b id="s-yield">–</b><span>yield</span></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Result</th><th>MAC</th><th>Failed</th><th>RSSI</th><th>Time</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const STATUS = { idle: "Idle", waiting: "Waiting for a board", testing: "Testing", unplug: "Unplug the board" };
+const CHOICE_LABEL = { y: "Yes", n: "No", r: "Repeat", next: "Next board" };
+let curStep = null, askChoices = null;
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} :
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return r.json();
+}
+
+function setState(state, text) {
+  const pill = $("pill");
+  pill.className = "pill " + state;
+  pill.textContent = text || STATUS[state] || state;
+  const running = state !== "idle";
+  $("start").disabled = running;
+  $("stop").disabled = !running;
+  $("settings").disabled = running;
+  if (state === "waiting") {
+    $("idle").innerHTML = '<div class="big">Plug in a board</div>it is detected automatically over USB';
+    $("idle").hidden = false; $("current").hidden = true;
+  } else if (state === "idle") {
+    $("idle").innerHTML = '<div class="big">Press “Start testing”</div>then plug in a board over USB-C';
+    if ($("current").hidden) $("idle").hidden = false;
+  }
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function finishStep() {
+  if (!curStep) return;
+  curStep.classList.remove("running");
+  if (curStep.querySelector(".line.fail")) curStep.classList.add("fail");
+  else if (curStep.querySelector(".line.pass")) curStep.classList.add("pass");
+  curStep.querySelectorAll(".line.prompt").forEach(p => p.classList.add("done"));
+}
+
+function newStep(title) {
+  finishStep();
+  curStep = el("li", "step running");
+  const t = el("div", "step-title");
+  t.append(el("span", "dot"), el("span", "", title));
+  curStep.append(t);
+  $("steps").append(curStep);
+}
+
+function addLine(kind, text) {
+  if (!curStep) newStep("setup");
+  curStep.append(el("div", "line " + kind, (kind === "prompt" ? "👉 " : "") + text));
+}
+
+function showAsk(q, choices) {
+  askChoices = choices;
+  $("ask-q").textContent = q;
+  const btns = $("ask-btns");
+  btns.innerHTML = "";
+  for (const c of choices) {
+    const b = el("button", c, CHOICE_LABEL[c] || c);
+    const k = el("kbd", "", c === "next" ? "Enter" : c.toUpperCase());
+    b.append(k);
+    b.onclick = () => answer(c);
+    btns.append(b);
+  }
+  $("ask").classList.add("show");
+}
+
+function hideAsk() { askChoices = null; $("ask").classList.remove("show"); }
+
+function answer(c) { if (askChoices) { hideAsk(); api("/api/answer", { value: c }); } }
+
+document.addEventListener("keydown", e => {
+  if (!askChoices || e.target.tagName === "INPUT") return;
+  const k = e.key === "Enter" ? (askChoices.includes("next") ? "next" : "y") : e.key.toLowerCase();
+  if (askChoices.includes(k)) { e.preventDefault(); answer(k); }
+});
+
+function handle(ev) {
+  switch (ev.kind) {
+    case "status": setState(ev.state, ev.text); break;
+    case "board":
+      $("idle").hidden = true; $("current").hidden = false;
+      $("board-no").textContent = "#" + ev.board;
+      $("board-mac").textContent = ev.port;
+      $("verdict").className = ""; $("verdict").innerHTML = "";
+      $("steps").innerHTML = ""; curStep = null; hideAsk();
+      break;
+    case "step": newStep(ev.text); break;
+    case "pass": case "fail": case "note": case "log": case "prompt":
+      if (ev.kind === "pass" && ev.text.startsWith("ESP32-C6  MAC"))
+        $("board-mac").textContent = ev.text.replace("ESP32-C6  ", "");
+      addLine(ev.kind, ev.text); break;
+    case "ask": showAsk(ev.text, ev.choices); break;
+    case "answered": hideAsk(); addLine("note", "answer: " + (CHOICE_LABEL[ev.text] || ev.text)); break;
+    case "result":
+      hideAsk(); finishStep(); curStep = null;
+      $("verdict").className = ev.text;
+      $("verdict").innerHTML = ev.text === "PASS" ? "PASS" :
+        "FAIL<small>" + ev.failed.join(", ") + "</small>";
+      loadResults();
+      break;
+  }
+}
+
+async function loadResults() {
+  const rows = await api("/api/results");
+  const pass = rows.filter(r => r.result === "PASS").length;
+  $("s-total").textContent = rows.length;
+  $("s-pass").textContent = pass;
+  $("s-fail").textContent = rows.length - pass;
+  $("s-yield").textContent = rows.length ? Math.round(100 * pass / rows.length) + "%" : "–";
+  const tb = $("rows");
+  tb.innerHTML = "";
+  for (const r of rows.slice().reverse()) {
+    const tr = el("tr", r.result);
+    const res = el("td"); res.append(el("span", "tag " + r.result, r.result));
+    tr.append(el("td", "", r.board), res, el("td", "mono", r.mac), el("td", "", r.failed),
+              el("td", "", r.wifi_rssi), el("td", "muted", (r.time || "").replace("T", " ")));
+    tb.append(tr);
+  }
+}
+
+$("start").onclick = () => api("/api/start", {
+  note: $("note").value, auto: $("auto").checked, no_flash: $("no_flash").checked,
+  skip_uart_pins: $("skip_uart_pins").checked, min_rssi: $("min_rssi").value,
+});
+$("stop").onclick = () => { api("/api/stop", {}); $("pill").textContent = "Stopping after this board…"; };
+
+async function init() {
+  const s = await api("/api/state");
+  $("csv").textContent = "→ " + s.csv;
+  if (s.app) $("app").textContent = "after PASS flashes: " + s.app.split("/").pop();
+  for (const [k, v] of Object.entries(s.settings || {})) {
+    const i = $(k); if (!i) continue;
+    if (i.type === "checkbox") i.checked = !!v; else i.value = v;
+  }
+  setState(s.state);
+  loadResults();
+  const es = new EventSource("/api/events");
+  es.onmessage = m => handle(JSON.parse(m.data));
+  setInterval(async () => {
+    const st = await api("/api/state");
+    $("ports").textContent = st.ports.length ? "USB: " + st.ports.join(", ") : "no board on USB";
+  }, 2000);
+}
+init();
+</script>
+</body>
+</html>

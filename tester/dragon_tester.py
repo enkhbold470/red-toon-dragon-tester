@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Flash + test station for the Red Eyes Toon Dragon board (ESP32-C6-MINI-1U).
 
-    python dragon_tester.py              # batch: plug a board, it flashes + tests, repeat
-    python dragon_tester.py test         # test the board that's plugged in (no flashing)
-    python dragon_tester.py info         # chip / MAC / flash info only
-    python dragon_tester.py flash        # flash MicroPython only
-    python dragon_tester.py monitor      # serial console (Ctrl-] to quit)
+    python tester/dragon_tester.py              # batch: plug a board, it flashes + tests, repeat
+    python tester/dragon_tester.py test         # test the board that's plugged in (no flashing)
+    python tester/dragon_tester.py info         # chip / MAC / flash info only
+    python tester/dragon_tester.py flash        # flash MicroPython only
+    python tester/dragon_tester.py monitor      # serial console (Ctrl-] to quit)
+    python tester/dragon_tester.py web          # same batch station in your browser
 
 Results go to results.csv (one row per board) and logs/<mac>.log.
 """
@@ -35,6 +36,8 @@ HINTS = {
             "PWR LED dark: D3, R11, and solder jumper JP1 must be bridged.",
     "boot": "BOOT button (SW2, GPIO9, R6 10k pull-up) not seen. Check SW2 soldering.",
     "reset": "RESET button (SW1, EN, R5 10k + C10 1uF) did not reset the chip. Check SW1 soldering.",
+    "self_reset": "The chip restarted by itself (crash or watchdog), not from the RESET pin. "
+                  "If it keeps happening, check the 5V/3V3 rails (F1, D4, U2, C13) and the USB cable.",
     "i2c": "Qwiic J2: SDA=GPIO0, SCL=GPIO14. No pull-ups on the board - your sensor must have them.",
     "wifi": "No Wi-Fi networks seen. This is the -1U module: plug an antenna into the U.FL connector.",
 }
@@ -52,10 +55,34 @@ TESTS = ["chip", "gpio", "leds", "boot", "reset", "wifi", "i2c"]
 def c(code, s):
     return f"\033[{code}m{s}\033[0m" if sys.stdout.isatty() else s
 
-def ok(s):   print(c("32", "  PASS ") + s)
-def bad(s):  print(c("31", "  FAIL ") + s)
-def note(s): print(c("33", "  .... ") + s)
-def step(s): print(c("1;36", "\n== " + s))
+class ConsoleUI:
+    """Where test output and operator questions go. dragon_web.py swaps in a web UI."""
+    STYLE = {"pass": ("32", "  PASS "), "fail": ("31", "  FAIL "), "note": ("33", "  .... "),
+             "step": ("1;36", "\n== "), "prompt": ("1;33", "  >> "), "log": ("0", ""),
+             "board": ("1;35", "\n######## "), "status": ("0", "")}
+
+    def emit(self, kind, text, **data):
+        if kind == "result":
+            color = "1;42" if text == "PASS" else "1;41"
+            failed = f" ({', '.join(data['failed'])})" if data["failed"] else ""
+            print(c(color, f"\n  BOARD #{data['board']}: {text}{failed}  ") + "\n")
+            return
+        code, prefix = self.STYLE[kind]
+        print(c(code, prefix + text))
+
+    def ask(self, question, choices):
+        while True:
+            a = input(c("1;33", f"  ?  {question} [{'/'.join(choices)}] ")).strip().lower()
+            if a in choices or a == "":
+                return a or choices[0]
+
+ui = ConsoleUI()
+
+def ok(s):     ui.emit("pass", s)
+def bad(s):    ui.emit("fail", s)
+def note(s):   ui.emit("note", s)
+def step(s):   ui.emit("step", s)
+def prompt(s): ui.emit("prompt", s)
 
 # ---------------------------------------------------------------- ports
 
@@ -223,10 +250,10 @@ def run_tests(port, args):
             while True:
                 b.run("leds_cycle")
                 q = "Did BOTH RGB eyes go red -> green -> blue -> white, and is the PWR LED on? (r = repeat)"
-                a = input(c("1;33", f"  ?  {q} [y/n/r] ")).strip().lower()
+                a = ui.ask(q, ["y", "n", "r"])
                 if a != "r":
                     break
-            res["leds"] = a in ("", "y", "yes")
+            res["leds"] = a == "y"
             (ok if res["leds"] else bad)("LEDs")
             if not res["leds"]:
                 note(HINTS["leds"])
@@ -236,7 +263,7 @@ def run_tests(port, args):
         if args.auto:
             res["boot"] = None; note("skipped (--auto)")
         else:
-            print(c("1;33", "  >> press and release BOOT (SW2) ..."))
+            prompt("press and release BOOT (SW2) ...")
             b.exec("leds(0, 0, 40)")
             res["boot"] = wait_button(b, 15)
             b.exec("leds(0, 0, 0)")
@@ -265,10 +292,13 @@ def run_tests(port, args):
             res["reset"] = None; note("skipped (--auto)")
         else:
             b.exec("import time; leds(40, 0, 0); _t = time.ticks_ms()")
-            print(c("1;33", "  >> press RESET (SW1) - the eyes should go dark ..."))
-            res["reset"] = wait_reset(b, 20)
-            (ok if res["reset"] else bad)("RESET button / EN")
-            if not res["reset"]:
+            prompt("press RESET (SW1) - the eyes should go dark ...")
+            res["reset"], why = wait_reset(b, 20)
+            det["reset_cause"] = why
+            (ok if res["reset"] else bad)("RESET button / EN" + (f" (reset cause: {why})" if why else ""))
+            if why and not res["reset"]:
+                note(HINTS["self_reset"])
+            elif not res["reset"]:
                 note(HINTS["reset"])
     except Exception as e:
         bad(f"test crashed: {e}")
@@ -288,24 +318,36 @@ def wait_button(b, timeout):
         time.sleep(0.05)
     return False
 
+RESET_CAUSES = {0: "external", 1: "power-on / EN pin", 2: "crash (panic)",
+                3: "watchdog", 4: "deep sleep", 5: "soft reset"}
+
 def wait_reset(b, timeout):
-    """Reset drops the board's USB link; afterwards the REPL state must be gone."""
+    """Reset drops the board's USB link; afterwards the REPL state must be gone and the
+    chip must not report a crash, watchdog or soft reset (a self-reset is not the button).
+    Returns (passed, cause text or None)."""
     probe = "print('alive' if '_t' in globals() else 'fresh')"
+    cause = "import machine; print(machine.reset_cause())"
     t0 = time.time()
     while time.time() - t0 < timeout:
         try:
-            if "fresh" in b.exec(probe, timeout=2):
-                return True
+            fresh = "fresh" in b.exec(probe, timeout=2)
         except Exception:
             b.close()
             time.sleep(0.5)
             port = wait_for_port(10)
             if not port:
-                return False
+                return False, None
             b.port = port
-            return b.open(10) and "fresh" in b.exec(probe)
+            if not b.open(10):
+                return False, None
+            fresh = "fresh" in b.exec(probe)
+            if not fresh:
+                return False, None
+        if fresh:
+            n = int(b.exec(cause).strip())
+            return n in (0, 1), RESET_CAUSES.get(n, str(n))
         time.sleep(0.3)
-    return False
+    return False, None
 
 # ---------------------------------------------------------------- logging
 
@@ -339,12 +381,12 @@ def record(args, board_no, mac, res, det, flash_log):
 # ---------------------------------------------------------------- one board
 
 def do_board(args, port, board_no):
-    print(c("1;35", f"\n######## board #{board_no} on {port} ########"))
+    ui.emit("board", f"board #{board_no} on {port}", board=board_no, port=port)
     flash_log = ""
     step("chip info")
     good, info, out = chip_info(port)
     if not good:
-        bad("esptool could not talk to the chip"); note(HINTS["usb"]); print(out[-800:])
+        bad("esptool could not talk to the chip"); note(HINTS["usb"]); ui.emit("log", out[-800:])
         return {"usb": False}, {}, "unknown", out
     mac = info.get("mac", "unknown")
     ok(f"ESP32-C6  MAC {mac}  flash {info.get('flash', '?')}")
@@ -354,7 +396,7 @@ def do_board(args, port, board_no):
         t0 = time.time()
         good, flash_log = flash(port, firmware_path())
         if not good:
-            bad("flash failed"); note(HINTS["flash"]); print(flash_log[-800:])
+            bad("flash failed"); note(HINTS["flash"]); ui.emit("log", flash_log[-800:])
             return {"flash": False}, {}, mac, flash_log
         ok(f"flashed in {time.time() - t0:.0f}s")
         port = wait_for_port(15) or port
@@ -373,10 +415,7 @@ def do_board(args, port, board_no):
 
 def summarize(board_no, res):
     failed = [k for k, v in res.items() if v is False]
-    if failed:
-        print(c("1;41", f"\n  BOARD #{board_no}: FAIL ({', '.join(failed)})  ") + "\n")
-    else:
-        print(c("1;42", f"\n  BOARD #{board_no}: PASS  ") + "\n")
+    ui.emit("result", "FAIL" if failed else "PASS", board=board_no, failed=failed)
 
 # ---------------------------------------------------------------- commands
 
@@ -430,10 +469,10 @@ def cmd_monitor(args):
     sys.argv = ["miniterm", port, "115200", "--raw"]
     miniterm.main()
 
-def main():
+def build_parser():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", nargs="?", default="batch",
-                    choices=["batch", "test", "info", "flash", "monitor"])
+                    choices=["batch", "test", "info", "flash", "monitor", "web"])
     ap.add_argument("--port", help="serial port (default: auto-detect Espressif USB)")
     ap.add_argument("--no-flash", action="store_true", help="batch: test only, don't flash")
     ap.add_argument("--auto", action="store_true",
@@ -447,10 +486,19 @@ def main():
     ap.add_argument("--csv", default=os.path.join(HERE, "results.csv"))
     ap.add_argument("--note", help="text stored in the notes column (e.g. batch/lot)")
     ap.add_argument("-v", "--verbose", action="store_true")
-    args = ap.parse_args()
+    ap.add_argument("--listen", default="127.0.0.1:8765", help="web: host:port to serve on")
+    ap.add_argument("--no-browser", action="store_true", help="web: don't open a browser tab")
+    return ap
+
+def cmd_web(args):
+    import dragon_web
+    dragon_web.serve(args)
+
+def main():
+    args = build_parser().parse_args()
     try:
-        {"batch": cmd_batch, "test": cmd_test, "info": cmd_info,
-         "flash": cmd_flash, "monitor": cmd_monitor}[args.command](args)
+        {"batch": cmd_batch, "test": cmd_test, "info": cmd_info, "flash": cmd_flash,
+         "monitor": cmd_monitor, "web": cmd_web}[args.command](args)
     except KeyboardInterrupt:
         print("\nbye")
 

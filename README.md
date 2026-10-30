@@ -1,110 +1,90 @@
-# Red Eyes Toon Dragon: flash & test station
+# Red Eyes Toon Dragon
 
-A small Python tool that flashes and tests the **Red Eyes Toon Dragon** board
-(ESP32-C6-MINI-1U, 2× SK6812 RGB eyes, USB-C, Qwiic). You plug a board in, the tool
-flashes it and runs the tests, and the result is written to a CSV file. Then you plug
-in the next board.
+Everything you need for the **Red Eyes Toon Dragon** board, an ESP32-C6 with two RGB
+eyes, USB-C, Qwiic and two GPIO headers:
+
+- **Build on it.** A MicroPython library, examples, and a one-command run/deploy loop.
+  Works with you or your AI coding agent.
+- **Test it.** A flash-and-test station for batches of boards, with a CLI and a web GUI.
 
 Board design: <https://heypcb.ai/p/961e9487c50d?view=pcb>
 
-```
-######## board #12 on /dev/cu.usbmodem1101 ########
-== chip info
-  PASS ESP32-C6  MAC 7c:0c:5f:ca:98:88  flash 4MB
-== chip
-  PASS 4 MB flash, 160 MHz, temp 29 C, v1.29.0 on 2026-08-24
-== header GPIO shorts / solder bridges
-  PASS 17 header pins clean (no shorts to GND/3V3, no bridges)
-== LEDs (look at the board)
-  ?  Did BOTH RGB eyes go red -> green -> blue -> white, and is the PWR LED on? [y/n/r] y
-== BOOT button
-  >> press and release BOOT (SW2) ...
-  PASS BOOT button / GPIO9
-== Wi-Fi radio + antenna
-  PASS 6 networks, best RSSI -78 dBm (min -85)
-== Qwiic / I2C (info only)
-  .... devices on SDA=IO0/SCL=IO14: none
-== RESET button
-  >> press RESET (SW1) - the eyes should go dark ...
-  PASS RESET button / EN
+## Quick start
 
-  BOARD #12: PASS
-```
-
-## Setup (once)
-
-You need Python 3.9 or newer and a USB-C **data** cable.
+You need Python 3.9+ and a USB-C **data** cable.
 
 ```bash
 git clone https://github.com/enkhbold470/red-toon-dragon-tester
 cd red-toon-dragon-tester
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+
+python dev.py setup                          # once per board: MicroPython + dragon library
+python dev.py run examples/01_hello_eyes.py  # the eyes light up
 ```
 
-The MicroPython test firmware (v1.29.0, ESP32_GENERIC_C6) downloads on the first run
-and is checked against a pinned SHA-256.
+Linux: run `sudo usermod -aG dialout $USER` once, then log in again.
 
-Linux: add yourself to the `dialout` group (`sudo usermod -aG dialout $USER`, then log
-out and back in) so you can open the serial port.
+## Build on it
 
-## Testing a batch of boards
+```python
+import dragon
 
-```bash
-python dragon_tester.py
+dragon.eyes.color("purple")          # both eyes
+dragon.eyes.color((0, 80, 255), 1)   # right eye only (0 = left, 1 = right)
+dragon.eyes.rainbow()
+dragon.wait_button()                 # BOOT button
+ip = dragon.wifi("ssid", "password")
+sensors = dragon.i2c().scan()        # Qwiic port
 ```
 
-1. Plug in a board. The tool finds it on USB by itself (Espressif VID `303A`).
-2. It flashes the board (about 9 s), then runs the tests. Two of them need you:
-   - **look** at the LEDs and answer `y`, `n` or `r` (repeat the colour cycle)
-   - **press** BOOT, then RESET, when the tool asks
-3. A green **PASS** or red **FAIL** banner shows. Unplug the board and plug in the next one.
-
-Each board takes about 30 s. Every board gets a row in `results.csv` (board number,
-MAC, a pass/FAIL column per test, Wi-Fi RSSI) and a full log in `logs/<mac>.log`.
-Boards are numbered in order. Write the number on the board with a marker.
-
-Useful flags:
-
-| flag | what it does |
+| command | what it does |
 |---|---|
-| `--note "lot A"` | text saved in the notes column |
-| `--auto` | skip the steps that need a person (LEDs, buttons). For a quick check. |
-| `--app my_fw.bin` | after a board passes, flash your real firmware (merged image at `0x0`, or use `--app-offset 0x10000` for an app-only bin) |
-| `--no-flash` | test boards that already run MicroPython |
-| `--min-rssi -80` | make the Wi-Fi/antenna test stricter |
-| `--port COM5` | use this port instead of finding one |
-| `--skip-uart-pins` | leave IO16/IO17 out of the short test (if something is wired to them) |
+| `python dev.py run app.py` | run a file now, see its output (Ctrl-C stops it) |
+| `python dev.py deploy app.py` | make it start at every power-up |
+| `python dev.py undeploy` | remove it again |
+| `python dev.py exec "dragon.eyes.off()"` | run one line |
+| `python dev.py repl` | interactive MicroPython prompt |
+| `python dev.py secrets SSID PASSWORD` | store Wi-Fi credentials on the board, not in git |
+| `python dev.py doctor` | full hardware self-test |
 
-## Debugging one board
+### Examples
 
-```bash
-python dragon_tester.py info      # can the PC see the chip? MAC, flash size
-python dragon_tester.py flash     # put MicroPython on it
-python dragon_tester.py test      # run every test, no flashing
-python dragon_tester.py monitor   # serial console (Ctrl-] quits)
-```
-
-When a test fails, the tool prints which parts to check. All of those hints are
-below too.
-
-| symptom | where to look |
+| file | shows |
 |---|---|
-| **No port shows up / `info` fails** | Try a different USB-C cable (some only charge). Check that the PWR LED is on. If it's dark, check F1 (500 mA polyfuse), D4 (Schottky diode), U2 (AP2112K 3.3 V regulator). If it's lit, check the J1 USB-C D+/D− joints and U3 (USBLC6). Last resort: hold **BOOT**, tap **RESET**, let go of BOOT, then run `info` again. |
-| **Flash fails partway** | Use download mode as above. Look at U1's solder joints and the 3V3 decoupling (C13, C3). |
-| **GPIO "shorted to GND / 3V3"** | Solder bridge from that header pin to a GND or power pin. J4.8 (TX/IO16) sits right next to J4.9 (3V3). |
-| **GPIO "IOx bridged to IOy"** | Solder bridge between two header pins, or between U1 pads. The report names the header pins. |
-| **Neither RGB eye lights** | D1's data line is GPIO8 (U1 pad 22, pulled up by R7). The LEDs run on 5 V, so check D4/F1 and C2/C4/C5. |
-| **Left eye works, right one doesn't** | D1 DOUT → D2 DIN link (net `LED_DATA2`), or D2 itself. |
-| **Colours wrong or flickery** | The SK6812s run at 5 V but get 3.3 V data. That's at the edge of their logic threshold, and a weak D1 joint shows up here first. |
-| **PWR LED dark but the board works** | Solder jumper **JP1** must be bridged. Cut it on purpose to turn the PWR LED off. Then check D3 and R11. |
-| **BOOT not detected** | SW2 → GPIO9, with R6 10 k pull-up. |
-| **RESET not detected** | SW1 → EN, with R5 10 k pull-up and C10 1 µF. |
-| **Wi-Fi sees no networks / weak RSSI** | This board uses the **-1U** module (U.FL connector, no PCB antenna). Plug in an antenna. |
-| **Qwiic sensor not found** | SDA = GPIO0, SCL = GPIO14, 3V3 on J2. The board has **no I²C pull-ups**, so your sensor board must have them. |
+| `01_hello_eyes.py` | blink, rainbow, set a color |
+| `02_button.py` | BOOT button cycles eye colors |
+| `03_wifi_web.py` | color picker web page: change the eyes from your phone |
+| `04_qwiic_scan.py` | find sensors on the Qwiic port |
+| `05_mood_temp.py` | eyes follow the chip temperature |
+| `06_ble_beacon.py` | Bluetooth LE advertising as "ToonDragon" |
 
-## Pinout
+### With an AI agent
+
+The repo works with coding agents out of the box (Claude Code, Codex, Cursor and others):
+
+- [`AGENTS.md`](AGENTS.md) (also read as `CLAUDE.md`) explains the edit → run on hardware
+  → read output loop, the library API, the hardware rules an agent must not break, and
+  what "done" means.
+- [`board/board.json`](board/board.json) describes the hardware in machine-readable form:
+  every pin, rail, rule and part, plus the full netlist from the KiCad design. Agents
+  read it instead of guessing pins.
+- `python -m unittest discover tests` checks that the pin maps in the JSON, the
+  library and the C header agree. CI runs it on every push.
+
+Just ask: *"make the eyes blink faster when the room gets hot"*. The agent can run the
+result on the board and read the output itself.
+
+### Arduino / ESP-IDF
+
+Include [`include/toon_dragon.h`](include/toon_dragon.h) for the pin map. Choose
+"ESP32C6 Dev Module" with **USB CDC On Boot: Enabled**. Drive the eyes with any
+WS2812/NeoPixel library: 2 pixels, GRB, on `DRAGON_EYES_PIN`.
+
+## Hardware
+
+Facing the front, the module is at the top and USB-C at the bottom. The left eye is D1
+and the right eye is D2. RESET is on the left, BOOT on the right.
 
 | header pin | signal | | header pin | signal |
 |---|---|---|---|---|
@@ -114,35 +94,85 @@ below too.
 | J3.4 | IO4 | | J4.4 | IO20 |
 | J3.5 | IO3 | | J4.5 | IO19 |
 | J3.6 | IO2 | | J4.6 | IO18 |
-| J3.7 | IO1 | | J4.7 | RX0 / IO17 |
-| J3.8 | SDA / IO0 | | J4.8 | TX0 / IO16 |
+| J3.7 | IO1 | | J4.7 | RX / IO17 |
+| J3.8 | SDA / IO0 | | J4.8 | TX / IO16 |
 | J3.9 | SCL / IO14 | | J4.9 | 3V3 |
 | | | | J4.10 | GND |
 | | | | J4.11 | 5V |
 
-Other pins: RGB eyes (SK6812 ×2) on **GPIO8**, BOOT button on **GPIO9**, native USB on
-GPIO12/13. Qwiic J2: GND, 3V3, SDA (IO0), SCL (IO14).
+- **Eyes:** 2× SK6812 on GPIO8. **BOOT:** GPIO9. **Qwiic J2:** GND, 3V3, SDA (IO0), SCL (IO14).
+- ADC-capable pins: IO0 to IO6.
+- 3.3 V logic only. The 3V3 regulator gives 600 mA in total. GPIO8 and GPIO9 are
+  strapping pins.
+- **Antenna:** this is the -1U module, with a U.FL connector and no PCB antenna. Without
+  an antenna, Wi-Fi and BLE only reach a few metres.
+- The Qwiic port has **no I²C pull-ups**. Use Qwiic modules that have their own (most do).
 
-## How the tests work
+## Test station: flash and test many boards
 
-`dragon_tester.py` runs on the PC. It flashes with `esptool` and then drives
-MicroPython over its raw REPL. `board_side.py` holds the tests that run on the chip.
+```bash
+python tester/dragon_web.py          # browser GUI, opens http://127.0.0.1:8765
+python tester/dragon_tester.py       # same thing in the terminal
+```
 
-- **chip**: flash size ≥ 4 MB, CPU clock, die temperature, firmware version.
-- **GPIO**: no extra hardware needed. Every header pin is read with the internal
-  pull-up (a pin stuck at 0 is shorted to GND) and with the pull-down (a pin stuck at 1
-  is shorted to a rail). Then each pin in turn is driven low while the others are
-  pulled up. Any pin that follows it is bridged to it.
-- **LEDs**: cycles both SK6812s through R, G, B and white, and you confirm.
-- **BOOT**: watches GPIO9 go low, then high again.
-- **RESET**: saves a marker in RAM, you press RESET, and the test checks the marker is
-  gone (meaning the chip really restarted).
-- **Wi-Fi**: scans for networks. It passes if one is seen above `--min-rssi`, which shows
-  the radio and the antenna path work.
-- **I²C**: scans the Qwiic bus. Info only, it can't fail.
+Press **Start testing** and plug in a board. It gets flashed and tested on its own,
+and you answer the LED question with **Y/N** (on screen or on the keyboard) and press
+BOOT and RESET when asked. Then a big **PASS** or **FAIL** shows. Unplug the board, plug
+in the next one, and so on. Each board takes about 30 s. Every result goes to
+`tester/results.csv` (board number, MAC, a pass/FAIL column per test, Wi-Fi RSSI) and
+`tester/logs/<mac>.log`. The GUI keeps a live table with a yield count.
 
-To add a test, write `t_mytest()` in `board_side.py` that returns `{"ok": ..., ...}`,
-then call `b.run("mytest")` from `run_tests()` in `dragon_tester.py`.
+| test | how |
+|---|---|
+| chip | ESP32-C6 found, 4 MB flash, clock, die temperature |
+| GPIO | every header pin checked for shorts to GND or 3V3 and bridges to its neighbours, using only the chip's internal pulls. No test jig needed. |
+| LEDs | both eyes cycle R → G → B → white, and you confirm. The PWR LED is checked too. |
+| BOOT | waits for GPIO9 to go low, then high again |
+| RESET | the chip must really restart; crash or watchdog resets don't count |
+| Wi-Fi | scan must see a network above `--min-rssi` (radio + antenna) |
+| I²C | Qwiic bus scan (info only) |
+
+Options (CLI flags; in the GUI the main ones are checkboxes): `--note "lot A"`,
+`--auto` (skip the steps that need a person), `--no-flash`, `--min-rssi -70`,
+`--app my_fw.bin` (flash your real firmware after a PASS, with `--app-offset 0x10000`
+for app-only images), `--port`, `--skip-uart-pins`. Use
+`python tester/dragon_web.py --listen 0.0.0.0:8765` to open the GUI from another
+device on your network.
+
+**Set `--min-rssi` for your room.** Test one board with an antenna and one without, and
+pick a value between the two RSSI readings. Otherwise a board with no antenna can still
+pass when it's close to the router.
+
+## Troubleshooting
+
+| symptom | where to look |
+|---|---|
+| **No port shows up** | Try a different USB-C cable (some only charge). PWR LED dark? Check F1 (polyfuse), D4 (Schottky), U2 (AP2112K 3.3 V). PWR LED on? Check the J1 D+/D− joints and U3 (USBLC6). Last resort: hold **BOOT**, tap **RESET**, let go of BOOT, then retry. |
+| **Flash fails partway** | Use download mode as above. Check U1's solder joints and the 3V3 decoupling (C13, C3). |
+| **GPIO shorted to GND / 3V3** | Solder bridge to a power pin. J4.8 (TX/IO16) sits right next to J4.9 (3V3). |
+| **GPIO "IOx bridged to IOy"** | Solder bridge between two header pins, or between U1 pads. |
+| **Neither eye lights** | Data is GPIO8 (U1 pad 22, R7 pull-up). The eyes run on 5 V, so check D4/F1 and C2/C4/C5. |
+| **Left eye works, right one doesn't** | D1 DOUT → D2 DIN (net `LED_DATA2`), or D2 itself. |
+| **Colours wrong or flickery** | 3.3 V data into 5 V SK6812s is at the edge of their logic threshold. A weak D1 joint shows up here first. |
+| **PWR LED dark but the board works** | Solder jumper **JP1** on the back must be bridged. Then check D3 and R11. |
+| **BOOT not detected** | SW2 → GPIO9, with R6 10 k pull-up. |
+| **RESET not detected** | SW1 → EN, with R5 10 k + C10 1 µF. |
+| **"chip restarted by itself"** | Crash or watchdog during the test. Check the 5V/3V3 rails and the USB cable. |
+| **Wi-Fi sees nothing / weak RSSI** | Plug an antenna into the U.FL connector. |
+| **Qwiic sensor not found** | Your module needs I²C pull-ups. Check the cable orientation. |
+
+## Repo layout
+
+```
+lib/dragon.py          MicroPython board library
+examples/              runnable examples
+board/board.json       machine-readable hardware description
+include/toon_dragon.h  C pin map (Arduino / ESP-IDF)
+dev.py                 developer CLI
+tester/                factory test station (CLI + web GUI)
+tests/                 host-side checks
+AGENTS.md              guide for AI coding agents
+```
 
 ## License
 
