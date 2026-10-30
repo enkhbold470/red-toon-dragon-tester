@@ -41,6 +41,9 @@ class Repo(unittest.TestCase):
         self.assertEqual({k: v for k, v in c["J3"].items()}, header_gpios("J3"))
         self.assertEqual({k: v for k, v in c["J4"].items() if v is not None}, header_gpios("J4"))
         self.assertEqual(list(c["FREE"]), BOARD["free_gpio"])
+        self.assertEqual(c["TX"], g["uart_tx"]["gpio"])
+        self.assertEqual(c["RX"], g["uart_rx"]["gpio"])
+        self.assertEqual(list(c["ADC_PINS"]), BOARD["adc_gpio"])
 
     def test_c_header_matches_board(self):
         h = (ROOT / "include" / "toon_dragon.h").read_text()
