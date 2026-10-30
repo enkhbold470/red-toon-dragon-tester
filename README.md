@@ -11,7 +11,7 @@ Board design: <https://heypcb.ai/p/961e9487c50d?view=pcb>
 
 ## Set up (once)
 
-You need Python 3.9+ and a USB-C cable that carries data.
+You need Python 3.10+ (esptool 5 requires it) and a USB-C cable that carries data.
 
 ```bash
 git clone https://github.com/enkhbold470/red-toon-dragon-tester
