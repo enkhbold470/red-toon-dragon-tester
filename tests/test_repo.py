@@ -48,7 +48,12 @@ class Repo(unittest.TestCase):
         j4 = [int(x) for x in re.search(r"DRAGON_J4\[\] = \{([^}]*)\}", h).group(1).split(",")]
         self.assertEqual(j3, [header_gpios("J3")[i] for i in range(1, 10)])
         self.assertEqual(j4, [header_gpios("J4")[i] for i in range(1, 9)])
-        self.assertIn("DRAGON_EYES_PIN     %d " % BOARD["gpio"]["eyes"]["gpio"], h)
+        defines = {k: int(v) for k, v in re.findall(r"#define (DRAGON_\w+_PIN)\s+(\d+)", h)}
+        g = BOARD["gpio"]
+        self.assertEqual(defines, {
+            "DRAGON_EYES_PIN": g["eyes"]["gpio"], "DRAGON_BOOT_PIN": g["boot_button"]["gpio"],
+            "DRAGON_SDA_PIN": g["qwiic_sda"]["gpio"], "DRAGON_SCL_PIN": g["qwiic_scl"]["gpio"],
+            "DRAGON_TX_PIN": g["uart_tx"]["gpio"], "DRAGON_RX_PIN": g["uart_rx"]["gpio"]})
 
     def test_tester_labels_match_board(self):
         sys.path.insert(0, str(ROOT / "tester"))
