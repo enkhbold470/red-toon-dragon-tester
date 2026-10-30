@@ -58,13 +58,14 @@ class Eyes:
         return self._np
 
     def _scale(self, c):
-        if isinstance(c, str):
-            c = COLORS[c]
+        c = _rgb(c)
         b = self.brightness
         return (int(c[0] * b), int(c[1] * b), int(c[2] * b))
 
     def color(self, c, eye=None):
         """Set both eyes, or one eye (0 = left, 1 = right)."""
+        if eye not in (None, 0, 1):
+            raise ValueError("eye must be None (both), 0 (left) or 1 (right)")
         for i in ((0, 1) if eye is None else (eye,)):
             self._state[i] = c
             self.np[i] = self._scale(c)
@@ -89,11 +90,20 @@ class Eyes:
 
     def breathe(self, c="red", ms=1500):
         steps = 50
-        base = COLORS[c] if isinstance(c, str) else c
+        base = _rgb(c)
         for i in list(range(steps)) + list(range(steps, -1, -1)):
             k = i / steps
             self.color((int(base[0] * k), int(base[1] * k), int(base[2] * k)))
             time.sleep_ms(ms // (2 * steps))
+
+
+def _rgb(c):
+    """A COLORS name or an (r, g, b) tuple -> (r, g, b)."""
+    if isinstance(c, str):
+        if c not in COLORS:
+            raise ValueError("unknown color %r, use (r, g, b) or one of: %s" % (c, ", ".join(COLORS)))
+        return COLORS[c]
+    return c
 
 
 def wheel(pos):
